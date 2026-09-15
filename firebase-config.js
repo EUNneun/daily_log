@@ -9,10 +9,12 @@ window.DAYCOLOR_FIREBASE_CONFIG = {
   measurementId: "G-PSKNKW6GJ0"
 };
 
-// 로그인 후 프로필 사진 대신 누적 컬러 수를 표시합니다.
-document.addEventListener('DOMContentLoaded', () => {
+// Google 로그인 UI/상태 보강: 계정 선택창을 강제로 노출하고
+// 로그인 후에는 프로필 대신 누적 컬러 수를 표시합니다.
+document.addEventListener('DOMContentLoaded', async () => {
   const authBtn = document.getElementById('authBtn');
   const profile = document.getElementById('profile');
+  const syncStatus = document.getElementById('syncStatus');
   if (!authBtn || !profile) return;
 
   const style = document.createElement('style');
@@ -38,51 +40,70 @@ document.addEventListener('DOMContentLoaded', () => {
     badge.id = 'colorCountBadge';
     badge.type = 'button';
     badge.className = 'color-count hidden';
-    badge.setAttribute('aria-label', '로그인 상태 및 누적 컬러 수');
+    badge.setAttribute('aria-label', 'Google 로그인 상태 및 누적 컬러 수');
     authBtn.insertAdjacentElement('afterend', badge);
   }
 
   const getCount = () => {
     try {
       const saved = JSON.parse(localStorage.getItem('daycolor-v1'));
-      if (Array.isArray(saved?.records)) return saved.records.length;
-    } catch {}
-    return document.querySelectorAll('#recordList .record-card').length;
+      return Array.isArray(saved?.records) ? saved.records.length : 0;
+    } catch {
+      return 0;
+    }
   };
 
   const updateCount = () => {
     badge.innerHTML = `누적컬러 <b>${getCount()}</b>개`;
   };
 
-  const syncUi = () => {
-    // 기존 앱의 Firebase 인증 콜백은 로그인 시 profile의 hidden을 제거하고 authBtn을 숨깁니다.
-    const loggedIn = !profile.classList.contains('hidden') || authBtn.classList.contains('hidden');
-    authBtn.classList.toggle('hidden', loggedIn);
-    badge.classList.toggle('hidden', !loggedIn);
-    updateCount();
-  };
+  try {
+    const [{ initializeApp, getApps, getApp }, { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut }]
+      = await Promise.all([
+        import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'),
+        import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js')
+      ]);
 
-  // 인증 복원 타이밍과 관계없이 상태를 잡도록 초기 구간을 짧게 반복 확인합니다.
-  let checks = 0;
-  const timer = setInterval(() => {
-    syncUi();
-    checks += 1;
-    if (checks >= 30) clearInterval(timer);
-  }, 250);
+    const app = getApps().length ? getApp() : initializeApp(window.DAYCOLOR_FIREBASE_CONFIG);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
 
-  new MutationObserver(syncUi).observe(profile, {
-    attributes: true,
-    attributeFilter: ['class']
-  });
-  new MutationObserver(syncUi).observe(authBtn, {
-    attributes: true,
-    attributeFilter: ['class']
-  });
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        authBtn.classList.add('hidden');
+        badge.classList.remove('hidden');
+        updateCount();
+        if (syncStatus) syncStatus.textContent = `Google 로그인됨 · ${user.email || ''}`;
+      } else {
+        authBtn.classList.remove('hidden');
+        badge.classList.add('hidden');
+        if (syncStatus) syncStatus.textContent = 'Google로 동기화하면 여러 기기에서 같은 기록을 볼 수 있습니다. 로그인 전에는 이 브라우저에 저장됩니다.';
+      }
+    });
+
+    // 기존 onclick보다 먼저 가로채서 계정 선택창이 반드시 뜨는 로그인으로 실행합니다.
+    authBtn.addEventListener('click', async event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        console.error('Google login failed', error);
+        const code = error?.code || 'unknown-error';
+        if (syncStatus) syncStatus.textContent = `Google 로그인 실패 · ${code}`;
+        alert(`Google 로그인에 실패했습니다.\n${code}`);
+      }
+    }, true);
+
+    badge.addEventListener('click', async () => {
+      if (confirm('Google 계정 동기화를 종료할까요?')) await signOut(auth);
+    });
+  } catch (error) {
+    console.error('Firebase auth bootstrap failed', error);
+    if (syncStatus) syncStatus.textContent = 'Google 로그인 모듈을 불러오지 못했습니다.';
+  }
 
   const recordList = document.getElementById('recordList');
   if (recordList) new MutationObserver(updateCount).observe(recordList, { childList: true, subtree: true });
-
-  // 누적컬러 버튼을 누르면 기존 프로필 클릭 핸들러를 이용해 로그아웃할 수 있습니다.
-  badge.addEventListener('click', () => profile.click());
-  syncUi();
 });
