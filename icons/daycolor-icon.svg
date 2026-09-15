@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#FFFEFC"/>
+  <rect width="512" height="512" rx="112" fill="#FFFFFF"/>
   <defs>
     <clipPath id="stack">
       <rect x="96" y="96" width="320" height="320" rx="92"/>
     </clipPath>
   </defs>
   <g clip-path="url(#stack)">
-    <path d="M96 96h320v106.67H96z" fill="#A1E0DD"/>
-    <path d="M96 202.67h320v106.66H96z" fill="#FFABA8"/>
-    <path d="M96 309.33h320V416H96z" fill="#C387C2"/>
+    <path d="M96 96h320v106.67H96z" fill="#2F9C95"/>
+    <path d="M96 202.67h320v106.66H96z" fill="#E98578"/>
+    <path d="M96 309.33h320V416H96z" fill="#9A87C7"/>
   </g>
 </svg>
