@@ -13,7 +13,6 @@ window.DAYCOLOR_FIREBASE_CONFIG = {
 document.addEventListener('DOMContentLoaded', () => {
   const authBtn = document.getElementById('authBtn');
   const profile = document.getElementById('profile');
-  const recordList = document.getElementById('recordList');
   if (!authBtn || !profile) return;
 
   const style = document.createElement('style');
@@ -33,40 +32,57 @@ document.addEventListener('DOMContentLoaded', () => {
   `;
   document.head.appendChild(style);
 
-  const badge = document.createElement('button');
-  badge.type = 'button';
-  badge.className = 'color-count hidden';
-  badge.setAttribute('aria-label', 'Google 로그인 상태 및 누적 컬러 수');
-  authBtn.insertAdjacentElement('afterend', badge);
+  let badge = document.getElementById('colorCountBadge');
+  if (!badge) {
+    badge = document.createElement('button');
+    badge.id = 'colorCountBadge';
+    badge.type = 'button';
+    badge.className = 'color-count hidden';
+    badge.setAttribute('aria-label', '로그인 상태 및 누적 컬러 수');
+    authBtn.insertAdjacentElement('afterend', badge);
+  }
 
-  let loggedIn = false;
-
-  const updateCount = () => {
-    const count = document.querySelectorAll('#recordList .record-card').length;
-    badge.innerHTML = `누적컬러 <b>${count}</b>개`;
+  const getCount = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('daycolor-v1'));
+      if (Array.isArray(saved?.records)) return saved.records.length;
+    } catch {}
+    return document.querySelectorAll('#recordList .record-card').length;
   };
 
-  const updateAuthUi = () => {
+  const updateCount = () => {
+    badge.innerHTML = `누적컬러 <b>${getCount()}</b>개`;
+  };
+
+  const syncUi = () => {
+    // 기존 앱의 Firebase 인증 콜백은 로그인 시 profile의 hidden을 제거하고 authBtn을 숨깁니다.
+    const loggedIn = !profile.classList.contains('hidden') || authBtn.classList.contains('hidden');
     authBtn.classList.toggle('hidden', loggedIn);
     badge.classList.toggle('hidden', !loggedIn);
     updateCount();
   };
 
-  new MutationObserver(() => {
-    // 앱의 인증 콜백이 profile의 hidden 클래스를 제거하면 로그인으로 판단합니다.
-    if (!profile.classList.contains('hidden')) {
-      loggedIn = true;
-      updateAuthUi();
-    } else if (!authBtn.classList.contains('hidden')) {
-      loggedIn = false;
-      updateAuthUi();
-    }
-  }).observe(profile, { attributes: true, attributeFilter: ['class'] });
+  // 인증 복원 타이밍과 관계없이 상태를 잡도록 초기 구간을 짧게 반복 확인합니다.
+  let checks = 0;
+  const timer = setInterval(() => {
+    syncUi();
+    checks += 1;
+    if (checks >= 30) clearInterval(timer);
+  }, 250);
 
-  if (recordList) {
-    new MutationObserver(updateCount).observe(recordList, { childList: true, subtree: true });
-  }
+  new MutationObserver(syncUi).observe(profile, {
+    attributes: true,
+    attributeFilter: ['class']
+  });
+  new MutationObserver(syncUi).observe(authBtn, {
+    attributes: true,
+    attributeFilter: ['class']
+  });
 
+  const recordList = document.getElementById('recordList');
+  if (recordList) new MutationObserver(updateCount).observe(recordList, { childList: true, subtree: true });
+
+  // 누적컬러 버튼을 누르면 기존 프로필 클릭 핸들러를 이용해 로그아웃할 수 있습니다.
   badge.addEventListener('click', () => profile.click());
-  updateCount();
+  syncUi();
 });
