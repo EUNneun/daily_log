@@ -1,0 +1,9 @@
+// Firebase 콘솔 > 프로젝트 설정 > 내 앱 > 웹 앱에서 값을 복사하세요.
+window.DAYCOLOR_FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
