@@ -99,7 +99,7 @@
     <div class="editor-section"><h3>사진 <span class="optional">선택 · 최대 3장</span></h3><div id="photoGrid" class="photo-grid"></div><input id="photoInput" class="hidden" type="file" accept="image/*" multiple></div>
     <button id="deleteRecord" class="delete-btn hidden">이 기록 삭제</button>
   </div></div>
-  <div id="topicOverlay" class="overlay hidden" role="dialog" aria-modal="true"><div class="sheet"><h2 id="topicFormTitle">새 카테고리</h2><label>이름<input id="topicName" maxlength="8" placeholder="예: 운동"></label><label>아이콘 문자<input id="topicIcon" maxlength="2" placeholder="예: ✦"></label><label>보기 (쉼표로 구분)<input id="topicItems" placeholder="예: 산책, 여행, 휴식"></label><div id="palette" class="palette"></div><button id="saveTopic" class="primary">저장</button><button id="closeTopic" class="primary" style="background:#edf1f3;color:var(--ink);margin-top:8px">닫기</button></div></div>
+  <div id="topicOverlay" class="overlay hidden" role="dialog" aria-modal="true"><div class="sheet"><h2 id="topicFormTitle">새 카테고리</h2><label>이름<input id="topicName" maxlength="8" placeholder="예: 활동"></label><label>아이콘 문자<input id="topicIcon" maxlength="2" placeholder="예: ✦"></label><label>보기 (쉼표로 구분)<input id="topicItems" placeholder="예: 산책, 여행, 휴식"></label><div id="palette" class="palette"></div><button id="saveTopic" class="primary">저장</button><button id="closeTopic" class="primary" style="background:#edf1f3;color:var(--ink);margin-top:8px">닫기</button></div></div>
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="firebase-config.js"></script>
   <script>
@@ -108,12 +108,10 @@
     const DEFAULT_TOPICS=[
     {id:'meal',name:'식사',icon:'🍴',color:'#D7A84E',items:['아침식사','점심식사','저녁식사','간식','커피','술']},
     {id:'sleep',name:'수면',icon:'☾',color:'#9A87C7',items:['푹 잤어요','보통이에요','잠이 부족해요','낮잠']},
-    {id:'exercise',name:'운동',icon:'○',color:'#79A88D',items:['걷기','달리기','자전거','헬스','스트레칭']},
+    {id:'activity',name:'활동',icon:'✦',color:'#2F9C95',items:['걷기','달리기','자전거','헬스','스트레칭','독서','영상','게임','낚시','만들기','쇼핑','외출']},
     {id:'work',name:'업무',icon:'▣',color:'#5E8FC7',items:['집중 업무','회의','기획','야근','재택근무']},
     {id:'mood',name:'기분',icon:'☺',color:'#E98578',items:['행복해요','뿌듯해요','평온해요','피곤해요','속상해요']},
-    {id:'relation',name:'관계',icon:'♡',color:'#C681A5',items:['가족','연인','친구','동료','혼자만의 시간']},
-    {id:'hobby',name:'취미',icon:'✦',color:'#2F9C95',items:['독서','영상','게임','낚시','만들기']},
-    {id:'spend',name:'소비',icon:'◇',color:'#7B9AA8',items:['식비','쇼핑','교통','취미','생활비']}
+    {id:'relation',name:'관계',icon:'♡',color:'#C681A5',items:['가족','연인','친구','동료','혼자만의 시간']}
   ];
     const key='daycolor-v1',ownerKey='daycolor-owner-uid',$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
     let state={topics:structuredClone(DEFAULT_TOPICS),records:[]},view='home',monthCursor=new Date(),statsCursor=new Date(),recordsCursor=new Date(),statsRange='month',recordFilter='all',selectedDay=null,editingId=null,selectedMood='좋음',selectedCategories=[],selectedItem='',photoList=[],editingTopicId=null,selectedColor=COLORS[0],fb=null,syncTimer=null;
@@ -123,18 +121,26 @@
     const localKey=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
     const topicOf=id=>state.topics.find(t=>t.id===id)||DEFAULT_TOPICS.find(t=>t.id===id)||{id:'other',name:'기타',icon:'●',color:'#79A88D',items:[]};
     function tint(hex){if(!/^#[0-9a-f]{6}$/i.test(hex))return '#f3f6f6';return '#'+[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*.13+255*.87).toString(16).padStart(2,'0')).join('')}
-  function icon(t){const shapes={meal:'<path d="M6 3v7M9 3v7M6 7h3M7.5 10v11M16 3v18M16 3c3 2 3 8 0 10"/>',sleep:'<path d="M20.5 14.4A8.5 8.5 0 0 1 9.6 3.5a8.5 8.5 0 1 0 10.9 10.9Z"/><path d="m16.5 4 .5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5Z"/>',exercise:'<path d="M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10"/>',work:'<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2.5 19h19M9 19l1-3h4l1 3"/>',mood:'<circle cx="12" cy="12" r="9"/><path d="M8.5 10h.01M15.5 10h.01M8.5 14.5c2 2 5 2 7 0"/>',relation:'<circle cx="8" cy="8" r="3"/><circle cx="17" cy="8" r="2.5"/><path d="M2.5 20c0-4 2-6 5.5-6s5.5 2 5.5 6M13.5 15c1-.8 2.1-1 3.5-1 3 0 4.5 2 4.5 5"/>',hobby:'<path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H12a1.5 1.5 0 0 1 0-3h3.5A5.5 5.5 0 0 0 21 8.5C21 5.5 17 3 12 3Z"/><circle cx="7.5" cy="9" r=".7"/><circle cx="11" cy="6.8" r=".7"/><circle cx="15" cy="7.2" r=".7"/>',spend:'<path d="M5 8h14l-1 12H6L5 8ZM8.5 8V6a3.5 3.5 0 0 1 7 0v2"/><path d="M9 12h6"/>'};return shapes[t.id]?`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${shapes[t.id]}</svg>`:`<span aria-hidden="true">${esc(t.icon)}</span>`}
+  function icon(t){const shapes={meal:'<path d="M6 3v7M9 3v7M6 7h3M7.5 10v11M16 3v18M16 3c3 2 3 8 0 10"/>',sleep:'<path d="M20.5 14.4A8.5 8.5 0 0 1 9.6 3.5a8.5 8.5 0 1 0 10.9 10.9Z"/><path d="m16.5 4 .5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5Z"/>',activity:'<circle cx="12" cy="12" r="9"/><path d="M5.5 12h3l2-4 3.5 8 2-4h2.5"/>',work:'<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2.5 19h19M9 19l1-3h4l1 3"/>',mood:'<circle cx="12" cy="12" r="9"/><path d="M8.5 10h.01M15.5 10h.01M8.5 14.5c2 2 5 2 7 0"/>',relation:'<circle cx="8" cy="8" r="3"/><circle cx="17" cy="8" r="2.5"/><path d="M2.5 20c0-4 2-6 5.5-6s5.5 2 5.5 6M13.5 15c1-.8 2.1-1 3.5-1 3 0 4.5 2 4.5 5"/>'};return shapes[t.id]?`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${shapes[t.id]}</svg>`:`<span aria-hidden="true">${esc(t.icon)}</span>`}
     function notify(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(notify.timer);notify.timer=setTimeout(()=>t.classList.add('hidden'),2400)}
-    function migrate(){}
+    const LEGACY_TOPIC_MAP={exercise:'activity',hobby:'activity',spend:'activity'};
+    function normalizeState(data){
+      const source=structuredClone(data||{}),sourceTopics=source.topics||[],defaultIds=new Set(DEFAULT_TOPICS.map(t=>t.id)),legacyIds=new Set(Object.keys(LEGACY_TOPIC_MAP));
+      const topics=DEFAULT_TOPICS.map(base=>{const matches=sourceTopics.filter(t=>(LEGACY_TOPIC_MAP[t.id]||t.id)===base.id);return {...base,items:[...new Set([...(base.items||[]),...matches.flatMap(t=>t.items||[])])]}});
+      topics.push(...sourceTopics.filter(t=>t?.id&&!defaultIds.has(t.id)&&!legacyIds.has(t.id)));
+      const records=(source.records||[]).map(r=>{const categories=[...new Set((r.categories||[]).map(id=>LEGACY_TOPIC_MAP[id]||id))];const topicId=LEGACY_TOPIC_MAP[r.topicId]||r.topicId||categories[0];return {...r,topicId,categories}});
+      return {...source,topics,records,schemaVersion:2};
+    }
+    function migrate(){state=normalizeState(state)}
     function load(){try{const saved=JSON.parse(localStorage.getItem(key));if(saved?.topics&&saved?.records)state=saved}catch{}migrate();localStorage.setItem(key,JSON.stringify(state));renderAll()}
     function firebaseSyncNotice(error){const detail=String(error?.code||'')+' '+String(error?.message||'');return /permission-denied|failed-precondition|service.disabled|firestore api/i.test(detail)?'Firestore Database 설정이 필요해요.':'Firebase 동기화를 완료하지 못했어요.'}
     function persist(){localStorage.setItem(key,JSON.stringify(state));if(fb?.user){const uid=fb.user.uid;localStorage.setItem(ownerKey,uid);localStorage.setItem('daycolor-backup-'+uid,JSON.stringify(state));clearTimeout(syncTimer);syncTimer=setTimeout(()=>fb.save(state,uid).catch(e=>{const message=firebaseSyncNotice(e);$('#syncStatus').textContent='기록은 이 기기에 저장됐어요. '+message;notify(message)}),600)}}
     function cloudPayload(data){const copy=structuredClone(data);copy.records=(copy.records||[]).map(r=>{const photos=(r.photos||[r.photo].filter(Boolean)).filter(p=>typeof p==='string'&&!p.startsWith('data:'));return {...r,photo:photos[0]||'',photos}});return copy}
-    function mergeStates(remote,local){const records=new Map(),deleted={...(remote.deletedRecords||{}),...(local.deletedRecords||{})};for(const source of [remote,local])for(const r of source.records||[]){if(!r?.id)continue;const prev=records.get(r.id);if(!prev||Number(r.updatedAt||r.createdAt||0)>Number(prev.updatedAt||prev.createdAt||0)){const photos=(r.photos||[r.photo].filter(Boolean));records.set(r.id,{...r,photos:photos.length?photos:prev?.photos||[],photo:photos[0]||prev?.photo||''})}else if(prev&&!prev.photos?.length&&r.photos?.length)records.set(r.id,{...prev,photos:r.photos,photo:r.photo||r.photos[0]})}for(const [id,time] of Object.entries(deleted))if(Number(time)>=Number(records.get(id)?.updatedAt||records.get(id)?.createdAt||0))records.delete(id);const topics=new Map((local.topics||DEFAULT_TOPICS).map(t=>[t.id,t]));for(const t of remote.topics||[]){const current=topics.get(t.id);topics.set(t.id,{...t,items:[...new Set([...(t.items||[]),...(current?.items||[])])]})}return {topics:[...topics.values()],records:[...records.values()],deletedRecords:deleted}}
+    function mergeStates(remote,local){const records=new Map(),deleted={...(remote.deletedRecords||{}),...(local.deletedRecords||{})};for(const source of [remote,local])for(const r of source.records||[]){if(!r?.id)continue;const prev=records.get(r.id);if(!prev||Number(r.updatedAt||r.createdAt||0)>Number(prev.updatedAt||prev.createdAt||0)){const photos=(r.photos||[r.photo].filter(Boolean));records.set(r.id,{...r,photos:photos.length?photos:prev?.photos||[],photo:photos[0]||prev?.photo||''})}else if(prev&&!prev.photos?.length&&r.photos?.length)records.set(r.id,{...prev,photos:r.photos,photo:r.photo||r.photos[0]})}for(const [id,time] of Object.entries(deleted))if(Number(time)>=Number(records.get(id)?.updatedAt||records.get(id)?.createdAt||0))records.delete(id);const topics=new Map((local.topics||DEFAULT_TOPICS).map(t=>[t.id,t]));for(const t of remote.topics||[]){const current=topics.get(t.id);topics.set(t.id,{...t,items:[...new Set([...(t.items||[]),...(current?.items||[])])]})}return normalizeState({topics:[...topics.values()],records:[...records.values()],deletedRecords:deleted})}
     function monthRecords(y,m){return state.records.filter(r=>r.date?.startsWith([y,String(m+1).padStart(2,'0')].join('-')))}
     function recordColors(rows){return rows.sort((a,b)=>(a.time||'').localeCompare(b.time||'')).map(r=>topicOf(r.topicId).color)}
     // Home display colors are independent of older locally/cloud-saved palettes.
-    const CALENDAR_PALETTE={meal:'#FFB645',sleep:'#A17BE3',exercise:'#80B6A0',work:'#438FE9',mood:'#FF8072',relation:'#EB87AF',hobby:'#00B7BE',spend:'#7DAAC0'};
+    const CALENDAR_PALETTE={meal:'#FFB645',sleep:'#A17BE3',activity:'#00B7BE',work:'#438FE9',mood:'#FF8072',relation:'#EB87AF'};
     function calendarColors(rows){return [...rows].sort((a,b)=>(a.time||'').localeCompare(b.time||'')).map(r=>{const t=topicOf(r.topicId||(r.categories||[])[0]);return CALENDAR_PALETTE[t.id]||t.color})}
     function stackStyle(rows){const c=calendarColors(rows);return c.length?'linear-gradient(to bottom,'+c.map((x,i)=>x+' '+i*100/c.length+'% '+(i+1)*100/c.length+'%').join(',')+')':'#eef4f5'}
     function switchView(next){if(next==='records'&&view==='home')recordsCursor=new Date((selectedDay||localKey(monthCursor)).slice(0,7)+'-01T00:00:00');view=next;$$('.view').forEach(x=>x.classList.toggle('active',x.id===next+'View'));$$('.nav-btn').forEach(x=>x.classList.toggle('active',x.dataset.view===next));if(next==='records')renderRecords();if(next==='stats')renderStats();window.scrollTo(0,0)}
@@ -211,7 +217,7 @@
           const uid=user.uid,owner=localStorage.getItem(ownerKey);
           let local={topics:structuredClone(DEFAULT_TOPICS),records:[]};
           try{const saved=JSON.parse(localStorage.getItem(owner===uid?key:'daycolor-backup-'+uid));if(saved?.topics&&saved?.records)local=saved;else if(!owner)local=state}catch{}
-          state=local;renderAll();
+          state=normalizeState(local);local=state;localStorage.setItem(key,JSON.stringify(state));renderAll();
           try{
             const snap=await getDoc(doc(db,'users',uid,'app','data'));
             if(fb.user?.uid!==uid)return;
