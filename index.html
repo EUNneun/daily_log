@@ -127,7 +127,8 @@
     function notify(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(notify.timer);notify.timer=setTimeout(()=>t.classList.add('hidden'),2400)}
     function migrate(){}
     function load(){try{const saved=JSON.parse(localStorage.getItem(key));if(saved?.topics&&saved?.records)state=saved}catch{}migrate();localStorage.setItem(key,JSON.stringify(state));renderAll()}
-    function persist(){localStorage.setItem(key,JSON.stringify(state));if(fb?.user){const uid=fb.user.uid;localStorage.setItem(ownerKey,uid);localStorage.setItem('daycolor-backup-'+uid,JSON.stringify(state));clearTimeout(syncTimer);syncTimer=setTimeout(()=>fb.save(state,uid).catch(()=>{ $('#syncStatus').textContent='기록은 이 기기에 저장됐어요. 동기화를 다시 확인해 주세요.';notify('동기화를 완료하지 못했어요.')}),600)}}
+    function firebaseSyncNotice(error){const detail=String(error?.code||'')+' '+String(error?.message||'');return /permission-denied|failed-precondition|service.disabled|firestore api/i.test(detail)?'Firestore Database 설정이 필요해요.':'Firebase 동기화를 완료하지 못했어요.'}
+    function persist(){localStorage.setItem(key,JSON.stringify(state));if(fb?.user){const uid=fb.user.uid;localStorage.setItem(ownerKey,uid);localStorage.setItem('daycolor-backup-'+uid,JSON.stringify(state));clearTimeout(syncTimer);syncTimer=setTimeout(()=>fb.save(state,uid).catch(e=>{const message=firebaseSyncNotice(e);$('#syncStatus').textContent='기록은 이 기기에 저장됐어요. '+message;notify(message)}),600)}}
     function cloudPayload(data){const copy=structuredClone(data);copy.records=(copy.records||[]).map(r=>{const photos=(r.photos||[r.photo].filter(Boolean)).filter(p=>typeof p==='string'&&!p.startsWith('data:'));return {...r,photo:photos[0]||'',photos}});return copy}
     function mergeStates(remote,local){const records=new Map(),deleted={...(remote.deletedRecords||{}),...(local.deletedRecords||{})};for(const source of [remote,local])for(const r of source.records||[]){if(!r?.id)continue;const prev=records.get(r.id);if(!prev||Number(r.updatedAt||r.createdAt||0)>Number(prev.updatedAt||prev.createdAt||0)){const photos=(r.photos||[r.photo].filter(Boolean));records.set(r.id,{...r,photos:photos.length?photos:prev?.photos||[],photo:photos[0]||prev?.photo||''})}else if(prev&&!prev.photos?.length&&r.photos?.length)records.set(r.id,{...prev,photos:r.photos,photo:r.photo||r.photos[0]})}for(const [id,time] of Object.entries(deleted))if(Number(time)>=Number(records.get(id)?.updatedAt||records.get(id)?.createdAt||0))records.delete(id);const topics=new Map((local.topics||DEFAULT_TOPICS).map(t=>[t.id,t]));for(const t of remote.topics||[]){const current=topics.get(t.id);topics.set(t.id,{...t,items:[...new Set([...(t.items||[]),...(current?.items||[])])]})}return {topics:[...topics.values()],records:[...records.values()],deletedRecords:deleted}}
     function monthRecords(y,m){return state.records.filter(r=>r.date?.startsWith([y,String(m+1).padStart(2,'0')].join('-')))}
@@ -145,7 +146,7 @@
       $('#filters').innerHTML=filters.map(t=>'<button class="filter '+(recordFilter===t.id?'active':'')+'" data-filter="'+esc(t.id)+'" aria-pressed="'+(recordFilter===t.id)+'">'+esc(t.name)+'</button>').join('');
       $$('[data-filter]').forEach(b=>b.onclick=()=>{recordFilter=b.dataset.filter;renderRecords()});
       const month=localKey(new Date(recordsCursor.getFullYear(),recordsCursor.getMonth(),1)).slice(0,7);
-      const rows=state.records.filter(r=>r.date?.startsWith(month+'-')&&(recordFilter==='all'||r.topicId===recordFilter||(r.categories||[]).includes(recordFilter))).sort((a,b)=>b.date.localeCompare(a.date)||(a.time||'').localeCompare(b.time||'')||Number(a.createdAt||0)-Number(b.createdAt||0));
+      const rows=state.records.filter(r=>r.date?.startsWith(month+'-')&&(recordFilter==='all'||r.topicId===recordFilter||(r.categories||[]).includes(recordFilter))).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||Number(b.createdAt||0)-Number(a.createdAt||0));
       $('#recordMonth').textContent=recordsCursor.toLocaleDateString('ko-KR',{year:'numeric',month:'long'});
       const groups=new Map();for(const r of rows){if(!groups.has(r.date))groups.set(r.date,[]);groups.get(r.date).push(r)}
       $('#recordList').innerHTML=rows.length?[...groups].map(([date,records])=>{
@@ -221,7 +222,7 @@
             renderAll();
             await fb.save(state,uid);
             $('#syncStatus').textContent=(user.email||'Google 계정')+' 계정과 동기화됐어요.';
-          }catch(e){console.warn(e);$('#syncStatus').textContent='기록은 이 기기에 저장됐어요. Firebase 동기화를 확인해 주세요.';notify('Firebase 동기화를 완료하지 못했어요.')}
+          }catch(e){console.warn(e);const message=firebaseSyncNotice(e);$('#syncStatus').textContent='기록은 이 기기에 저장됐어요. '+message;notify(message)}
         });
       }catch(e){console.warn(e);$('#syncStatus').textContent='Google 동기화 연결을 확인해 주세요.'}
     }
